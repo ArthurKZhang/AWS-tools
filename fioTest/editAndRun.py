@@ -1,12 +1,47 @@
 import boto3
+import time
 import re
 
 ec2res = boto3.resource('ec2')
 ec2client = boto3.client('ec2')
 ssmClient = boto3.client('ssm')
 
-#your inputs
-newInstancesIds = ['***']
+#---------------------------------------------------------
+#|                  Prepare Client Instances             |
+#---------------------------------------------------------
+
+# input the ImageId here
+imageId = '...'
+# input the number of instances you wnat to launch here
+Number = ...
+# ...
+InstanceType = '....'
+KeyName = 'standard'
+# Needs AmazonSSMFullAccess policy
+IamInstanceProfile = {'Arn': 'arn:aws-cn:iam::...:instance-profile/...',
+                      }
+
+newInstances = ec2res.create_instances(ImageId=imageId,
+                                       InstanceType=InstanceType,
+                                       KeyName=KeyName,
+                                       MaxCount=Number,
+                                       MinCount=Number,
+                                       IamInstanceProfile=IamInstanceProfile)
+newInstancesIds = []
+for inst in newInstances:
+    newInstancesIds.append(inst.instance_id)
+    print('Created InstanceId: ' + inst.instance_id)
+print(newInstancesIds)
+
+for instanceId in newInstancesIds:
+    while ec2res.Instance(instanceId).state.get('Code') != 16:
+        print("instance not ready, wait 2 seconds...")
+        time.sleep(2)
+    print(instanceId + "is running")
+
+#---------------------------------------------------------
+#|     Run fio Command and get Command line Outputs      |
+#---------------------------------------------------------
 
 sendCommandResponse = ssmClient.send_command(
     InstanceIds=newInstancesIds,
@@ -47,7 +82,9 @@ for instId in newInstancesIds:
     print('')
     print(wbw[0])
 
-#Stop the new instances for saving cost
+# ----------------------------------------
+# |Stop the new instances for saving cost|
+# ----------------------------------------
 response = ec2client.stop_instances(
     InstanceIds=newInstancesIds,
     Force=True
